@@ -39,16 +39,16 @@
           ]
         }
       ],
-      "icon": "build/icon.ico",
+      "icon": "build/favicon.ico",
       "requestedExecutionLevel": "requireAdministrator"
     },
     "nsis": {
       "oneClick": false,
       "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "build/installerIcon.ico",
-      "uninstallerIcon": "build/uninstallerIcon.ico",
-      "installerHeaderIcon": "build/installerHeaderIcon.ico",
+      "installerIcon": "build/favicon.ico",
+      "uninstallerIcon": "build/favicon.ico",
+      "installerHeaderIcon": "build/favicon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "perMachine": true

@@ -21,6 +21,15 @@ contextBridge.exposeInMainWorld('ecApi', {
     };
     ipcRenderer.on('ec-start-exam', handler);
     return () => ipcRenderer.removeListener('ec-start-exam', handler);
+  },
+  onSetWatermark: (callback) => {
+    console.log('[preload] 注册 ec-set-watermark 监听器');
+    const handler = (_event, userInfo) => {
+      console.log('[preload] 收到 ec-set-watermark:', userInfo);
+      callback(userInfo);
+    };
+    ipcRenderer.on('ec-set-watermark', handler);
+    return () => ipcRenderer.removeListener('ec-set-watermark', handler);
   }
 });
 

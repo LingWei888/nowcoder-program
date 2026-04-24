@@ -22,6 +22,7 @@ let pendingNewTabUrls = [];
 let monitorIP = null;
 let clientId = null;
 let screenshotInterval = null;
+let currentUserInfo = null;
 
 function killBlockedProcessesOnWindows() {
   if (process.platform !== 'win32') return;
@@ -63,7 +64,7 @@ async function connectToMonitor(selectedMonitor = null, userInfo = null) {
     clientId = userInfo ? userInfo.studentId : getClientId();
 
     // 连接到监控服务器
-    await axios.post(`http://${monitorIP}:${config.MONITOR_SERVER.DEFAULT_PORT}${config.MONITOR_SERVER.ENDPOINTS.CONNECT}`, { 
+    await axios.post(`http://${monitorIP}:${config.MONITOR_SERVER.DEFAULT_PORT}${config.MONITOR_SERVER.ENDPOINTS.CONNECT}`, {
       clientId,
       name: userInfo?.name || '',
       nickname: userInfo?.nickname || ''
@@ -91,7 +92,7 @@ function startScreenshotCapture() {
 
     try {
       // 使用 Electron 自带的截图 API
-      const sources = await desktopCapturer.getSources({ 
+      const sources = await desktopCapturer.getSources({
         types: ['screen'],
         thumbnailSize: { width: 1920, height: 1080 }
       });
@@ -134,6 +135,7 @@ function createLoginWindow() {
     frame: true,
     backgroundColor: '#1e1e1e',
     title: '考生信息登记',
+    icon: path.join(__dirname, 'build', 'favicon.ico'),
     alwaysOnTop: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -164,7 +166,8 @@ function createMainWindow(examUrl) {
     movable: false,
     resizable: false,
     backgroundColor: '#111111',
-    title: 'EC监控工具',
+    title: '2OI监控工具',
+    icon: path.join(__dirname, 'build', 'favicon.ico'),
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -181,6 +184,12 @@ function createMainWindow(examUrl) {
     if (examUrl) {
       mainWindow.webContents.send('ec-start-exam', examUrl);
     }
+    
+    // 发送用户信息用于水印
+    if (currentUserInfo) {
+      mainWindow.webContents.send('ec-set-watermark', currentUserInfo);
+    }
+    
     mainWindow.show();
   });
 
@@ -286,6 +295,9 @@ ipcMain.handle('ec-select-monitor', async (_event, data) => {
   console.log('[main] 选择的监控服务器:', data.monitor);
   console.log('[main] 用户信息:', data.userInfo);
   
+  // 保存用户信息用于水印
+  currentUserInfo = data.userInfo;
+  
   try {
     await connectToMonitor(data.monitor, data.userInfo);
     return { success: true };
@@ -297,16 +309,16 @@ ipcMain.handle('ec-select-monitor', async (_event, data) => {
 
 ipcMain.handle('ec-open-main-window', (_event, examUrl) => {
   console.log('[main] 打开主窗口，考试URL:', examUrl);
-  
+
   // 创建主窗口
   createMainWindow(examUrl);
-  
+
   // 关闭并销毁登录窗口
   if (loginWindow && !loginWindow.isDestroyed()) {
     loginWindow.destroy();
     loginWindow = null;
   }
-  
+
   return { success: true };
 });
 
