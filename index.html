@@ -46,20 +46,6 @@
 
   <div id="content"></div>
 
-  <!-- 监控服务器选择模态框 -->
-  <div id="monitor-modal" class="modal visible" role="dialog" aria-modal="true" aria-labelledby="monitor-modal-title">
-    <div class="modal-box">
-      <h2 id="monitor-modal-title">选择监控服务器</h2>
-      <p>请选择一个在线的监控服务器来连接：</p>
-      <div id="monitor-list" style="max-height: 200px; overflow-y: auto; margin-bottom: 12px;">
-        <!-- 监控服务器列表将在这里显示 -->
-      </div>
-      <div class="modal-actions">
-        <button class="confirm-btn" id="connect-monitor-btn">连接</button>
-      </div>
-    </div>
-  </div>
-
   <div id="exit-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="exit-modal-title">
     <div class="modal-box">
       <h2 id="exit-modal-title">确认结束比赛</h2>
@@ -101,62 +87,6 @@
     const contentContainer = document.getElementById('content');
     const urlBar = document.getElementById('url-bar');
     let tabCount = 0;
-
-    // 监控服务器相关
-    let selectedMonitor = null;
-    const monitorModal = document.getElementById('monitor-modal');
-    const monitorList = document.getElementById('monitor-list');
-    const connectMonitorBtn = document.getElementById('connect-monitor-btn');
-
-    // 加载监控服务器列表
-    async function loadMonitors() {
-      try {
-        const response = await fetch(`${CONFIG.MONITOR_API.BASE_URL}${CONFIG.MONITOR_API.ENDPOINTS.GET_MONITORS}`);
-        const monitors = await response.json();
-
-        monitorList.innerHTML = '';
-        if (monitors.length === 0) {
-          monitorList.innerHTML = '<p style="color: #ff7b72;">暂无在线的监控服务器</p>';
-          connectMonitorBtn.disabled = true;
-          return;
-        }
-
-        monitors.forEach(monitor => {
-          const div = document.createElement('div');
-          div.style.cssText = 'padding: 8px; border: 1px solid #444; border-radius: 4px; margin-bottom: 8px; cursor: pointer; background: #111;';
-          div.innerHTML = `
-            <strong>${monitor.school} - ${monitor.location}</strong><br>
-            <small>IP: ${monitor.ip}</small>
-          `;
-          div.onclick = () => {
-            document.querySelectorAll('#monitor-list > div').forEach(el => el.style.background = '#111');
-            div.style.background = '#333';
-            selectedMonitor = monitor;
-            connectMonitorBtn.disabled = false;
-          };
-          monitorList.appendChild(div);
-        });
-      } catch (error) {
-        console.error('Failed to load monitors:', error);
-        monitorList.innerHTML = '<p style="color: #ff7b72;">加载监控服务器失败</p>';
-      }
-    }
-
-    // 连接监控服务器
-    connectMonitorBtn.onclick = () => {
-      if (!selectedMonitor) return;
-
-      // 发送选择的信息到主进程
-      if (window.ecApi && window.ecApi.selectMonitor) {
-        window.ecApi.selectMonitor(selectedMonitor);
-        monitorModal.classList.remove('visible');
-        // 开始考试
-        createTab(EXAM_URL);
-      }
-    };
-
-    // 加载监控服务器
-    loadMonitors();
 
     function normalizeUrl(url) {
       try {
@@ -313,12 +243,16 @@
       const remaining = document.querySelectorAll('.tab');
       if (remaining.length > 0) {
         switchTab(remaining[remaining.length - 1].id.replace('ui_', ''));
-      } else {
-        createTab(EXAM_URL);
       }
     }
 
-    createTab(EXAM_URL);
+    // 监听主进程发送的考试URL
+    if (window.ecApi && typeof window.ecApi.onStartExam === 'function') {
+      window.ecApi.onStartExam((examUrl) => {
+        console.log('[renderer] 收到考试URL:', examUrl);
+        createTab(examUrl);
+      });
+    }
 
     // 【正确的工作流】：接收主进程 web-contents-created 拦截到的新标签请求
     console.log('[renderer] ecApi available:', !!window.ecApi, window.ecApi);

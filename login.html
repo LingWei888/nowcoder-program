@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https: http:;">
+  <title>考生信息登记</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f4f8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .login-box {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 32px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    h1 {
+      color: #1a1a1a;
+      font-size: 20px;
+      margin-bottom: 6px;
+      text-align: center;
+      font-weight: 600;
+    }
+    .subtitle {
+      color: #666;
+      font-size: 13px;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      color: #333;
+      font-size: 13px;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d9d9d9;
+      border-radius: 4px;
+      background: #fff;
+      color: #333;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: #4a90e2;
+    }
+    input::placeholder {
+      color: #bbb;
+    }
+    select {
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+    }
+    .error {
+      color: #ff4d4f;
+      font-size: 12px;
+      min-height: 18px;
+      margin-bottom: 12px;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #4a90e2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #357abd;
+    }
+    button:active {
+      background: #2a5f9e;
+    }
+    button:disabled {
+      background: #d9d9d9;
+      color: #999;
+      cursor: not-allowed;
+    }
+    .monitor-section {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid #e8e8e8;
+      display: none;
+    }
+    .monitor-section.visible {
+      display: block;
+    }
+    .monitor-section h2 {
+      color: #1a1a1a;
+      font-size: 16px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .loading {
+      color: #999;
+      text-align: center;
+      padding: 16px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <h1>考生信息登记</h1>
+    <p class="subtitle">请填写您的个人信息以进入考试系统</p>
+    
+    <div class="form-group">
+      <label for="student-name">姓名</label>
+      <input id="student-name" type="text" placeholder="请输入真实姓名" autocomplete="off">
+    </div>
+    
+    <div class="form-group">
+      <label for="student-id">学号</label>
+      <input id="student-id" type="text" placeholder="请输入学号" autocomplete="off">
+    </div>
+    
+    <div class="form-group">
+      <label for="student-nickname">网名</label>
+      <input id="student-nickname" type="text" placeholder="用于滚榜显示" autocomplete="off">
+    </div>
+    
+    <div class="error" id="error-msg"></div>
+    
+    <button id="submit-btn" disabled>下一步</button>
+    
+    <div class="monitor-section" id="monitor-section">
+      <h2>选择考场</h2>
+      <div class="form-group">
+        <label for="monitor-select">学校/考场</label>
+        <select id="monitor-select" disabled>
+          <option value="">请选择考场</option>
+        </select>
+      </div>
+      <button id="connect-btn" disabled>连接并进入考试</button>
+    </div>
+  </div>
+
+  <script>
+    const CONFIG = {
+      MONITOR_API: {
+        BASE_URL: 'http://api-acnowcoder.exitcode.cn',
+        ENDPOINTS: {
+          GET_MONITORS: '/monitors'
+        }
+      }
+    };
+
+    let userInfo = { name: '', studentId: '', nickname: '' };
+    let selectedMonitor = null;
+    let monitorsData = [];
+
+    const nameInput = document.getElementById('student-name');
+    const idInput = document.getElementById('student-id');
+    const nicknameInput = document.getElementById('student-nickname');
+    const errorMsg = document.getElementById('error-msg');
+    const submitBtn = document.getElementById('submit-btn');
+    const monitorSection = document.getElementById('monitor-section');
+    const monitorSelect = document.getElementById('monitor-select');
+    const connectBtn = document.getElementById('connect-btn');
+
+    // 验证表单
+    function validateForm() {
+      const name = nameInput.value.trim();
+      const studentId = idInput.value.trim();
+      const nickname = nicknameInput.value.trim();
+      
+      if (name && studentId && nickname) {
+        submitBtn.disabled = false;
+        return true;
+      }
+      submitBtn.disabled = true;
+      return false;
+    }
+
+    [nameInput, idInput, nicknameInput].forEach(input => {
+      input.addEventListener('input', validateForm);
+    });
+
+    // 提交用户信息
+    submitBtn.onclick = async () => {
+      const name = nameInput.value.trim();
+      const studentId = idInput.value.trim();
+      const nickname = nicknameInput.value.trim();
+
+      if (!name || !studentId || !nickname) {
+        errorMsg.textContent = '请填写所有字段';
+        return;
+      }
+
+      userInfo = { name, studentId, nickname };
+      errorMsg.textContent = '';
+      
+      // 禁用表单
+      [nameInput, idInput, nicknameInput].forEach(input => input.disabled = true);
+      submitBtn.disabled = true;
+      submitBtn.textContent = '加载中...';
+
+      // 显示监控服务器选择
+      monitorSection.classList.add('visible');
+      await loadMonitors();
+    };
+
+    // 加载监控服务器列表
+    async function loadMonitors() {
+      try {
+        const response = await fetch(`${CONFIG.MONITOR_API.BASE_URL}${CONFIG.MONITOR_API.ENDPOINTS.GET_MONITORS}`);
+        monitorsData = await response.json();
+
+        monitorSelect.innerHTML = '<option value="">请选择考场</option>';
+        
+        if (monitorsData.length === 0) {
+          monitorSelect.innerHTML = '<option value="">暂无可用考场</option>';
+          return;
+        }
+
+        monitorsData.forEach((monitor, index) => {
+          const option = document.createElement('option');
+          option.value = index;
+          option.textContent = `${monitor.school} - ${monitor.location}`;
+          monitorSelect.appendChild(option);
+        });
+
+        monitorSelect.disabled = false;
+      } catch (error) {
+        console.error('Failed to load monitors:', error);
+        monitorSelect.innerHTML = '<option value="">加载失败</option>';
+      }
+    }
+
+    // 监听下拉框选择
+    monitorSelect.onchange = () => {
+      const selectedIndex = monitorSelect.value;
+      if (selectedIndex !== '') {
+        selectedMonitor = monitorsData[parseInt(selectedIndex)];
+        connectBtn.disabled = false;
+      } else {
+        selectedMonitor = null;
+        connectBtn.disabled = true;
+      }
+    };
+
+    // 连接监控服务器
+    connectBtn.onclick = async () => {
+      if (!selectedMonitor) return;
+
+      connectBtn.disabled = true;
+      connectBtn.textContent = '连接中...';
+
+      try {
+        // 通知主进程并等待连接完成
+        if (window.ecApi && window.ecApi.selectMonitor) {
+          const result = await window.ecApi.selectMonitor({
+            monitor: selectedMonitor,
+            userInfo: userInfo
+          });
+
+          if (!result.success) {
+            throw new Error(result.error || '连接失败');
+          }
+
+          // 获取比赛信息
+          const response = await fetch(`http://${selectedMonitor.ip}:3000/get-exam-info`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              clientId: userInfo.studentId,
+              name: userInfo.name,
+              nickname: userInfo.nickname
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error('获取比赛信息失败');
+          }
+
+          const examInfo = await response.json();
+          
+          if (examInfo.success && examInfo.examUrl) {
+            // 打开主窗口
+            if (window.ecApi && window.ecApi.openMainWindow) {
+              await window.ecApi.openMainWindow(examInfo.examUrl);
+            }
+          } else {
+            throw new Error('未获取到比赛链接');
+          }
+        }
+      } catch (error) {
+        console.error('Connection failed:', error);
+        errorMsg.textContent = '连接失败：' + error.message;
+        connectBtn.disabled = false;
+        connectBtn.textContent = '连接并进入考试';
+      }
+    };
+
+    // 回车键提交
+    [nameInput, idInput, nicknameInput].forEach((input, index, arr) => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          if (index < arr.length - 1) {
+            arr[index + 1].focus();
+          } else if (!submitBtn.disabled) {
+            submitBtn.click();
+          }
+        }
+      });
+    });
+  </script>
+</body>
+</html>

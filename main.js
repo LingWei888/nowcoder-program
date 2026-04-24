@@ -15,6 +15,7 @@ const EXIT_CONFIRM_TEXT = config.EXIT.CONFIRM_TEXT;
 const BLOCKED_PROCESS_NAMES = config.BLOCKED_PROCESSES;
 
 let mainWindow = null;
+let loginWindow = null;
 let isAppQuittingAllowed = false;
 let isRendererReady = false;
 let pendingNewTabUrls = [];
@@ -38,7 +39,7 @@ function getClientId() {
 }
 
 // 连接到监控服务器
-async function connectToMonitor(selectedMonitor = null) {
+async function connectToMonitor(selectedMonitor = null, userInfo = null) {
   try {
     let monitors;
 
@@ -59,10 +60,14 @@ async function connectToMonitor(selectedMonitor = null) {
     }
 
     monitorIP = selectedMonitor.ip;
-    clientId = getClientId();
+    clientId = userInfo ? userInfo.studentId : getClientId();
 
     // 连接到监控服务器
-    await axios.post(`http://${monitorIP}:${config.MONITOR_SERVER.DEFAULT_PORT}${config.MONITOR_SERVER.ENDPOINTS.CONNECT}`, { clientId });
+    await axios.post(`http://${monitorIP}:${config.MONITOR_SERVER.DEFAULT_PORT}${config.MONITOR_SERVER.ENDPOINTS.CONNECT}`, { 
+      clientId,
+      name: userInfo?.name || '',
+      nickname: userInfo?.nickname || ''
+    });
     console.log(`Connected to monitor ${monitorIP} as ${clientId}`);
 
     // 启动心跳
@@ -119,17 +124,47 @@ function stopScreenshotCapture() {
   }
 }
 
-function createMainWindow() {
+function createLoginWindow() {
+  loginWindow = new BrowserWindow({
+    width: 500,
+    height: 650,
+    resizable: false,
+    movable: true,
+    frame: true,
+    backgroundColor: '#1e1e1e',
+    title: '考生信息登记',
+    alwaysOnTop: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  loginWindow.loadFile('login.html');
+  loginWindow.setMenu(null);
+
+  // 登录窗口关闭时退出应用
+  loginWindow.on('closed', () => {
+    loginWindow = null;
+    if (!mainWindow) {
+      app.quit();
+    }
+  });
+}
+
+function createMainWindow(examUrl) {
   mainWindow = new BrowserWindow({
     width: 1366,
     height: 768,
-    fullscreen: true,          // 全屏
-    frame: false,              // 无边框
-    alwaysOnTop: true,         // 始终置顶
+    fullscreen: true,
+    frame: false,
+    alwaysOnTop: true,
     movable: false,
     resizable: false,
     backgroundColor: '#111111',
     title: 'EC监控工具',
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       webviewTag: true,
@@ -139,6 +174,14 @@ function createMainWindow() {
   });
 
   mainWindow.loadFile('index.html');
+
+  // 等待页面加载完成后发送考试URL
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (examUrl) {
+      mainWindow.webContents.send('ec-start-exam', examUrl);
+    }
+    mainWindow.show();
+  });
 
   mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
     console.log(`[main][renderer console] level=${level} line=${line} source=${sourceId} message=${message}`);
@@ -238,9 +281,32 @@ ipcMain.on('ec-renderer-ready', (_event) => {
   }
 });
 
-ipcMain.on('ec-select-monitor', (_event, monitor) => {
-  console.log('[main] 选择的监控服务器:', monitor);
-  connectToMonitor(monitor);
+ipcMain.handle('ec-select-monitor', async (_event, data) => {
+  console.log('[main] 选择的监控服务器:', data.monitor);
+  console.log('[main] 用户信息:', data.userInfo);
+  
+  try {
+    await connectToMonitor(data.monitor, data.userInfo);
+    return { success: true };
+  } catch (error) {
+    console.error('[main] 连接失败:', error.message);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('ec-open-main-window', (_event, examUrl) => {
+  console.log('[main] 打开主窗口，考试URL:', examUrl);
+  
+  // 创建主窗口
+  createMainWindow(examUrl);
+  
+  // 关闭并销毁登录窗口
+  if (loginWindow && !loginWindow.isDestroyed()) {
+    loginWindow.destroy();
+    loginWindow = null;
+  }
+  
+  return { success: true };
 });
 
 app.on('browser-window-created', (_event, win) => {
@@ -270,7 +336,7 @@ if (!gotTheLock) {
   // 原本的生命周期逻辑放在锁的内部
   app.whenReady().then(() => {
     killBlockedProcessesOnWindows();
-    createMainWindow();
+    createLoginWindow();
     registerSafeQuitShortcut();
     // 连接监控服务器现在通过用户选择
   });
