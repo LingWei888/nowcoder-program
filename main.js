@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, ipcMain } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, desktopCapturer } = require('electron');
 const { exec } = require('child_process');
 const axios = require('axios');
 const screenshot = require('desktop-screenshot');
@@ -86,33 +86,34 @@ async function connectToMonitor(selectedMonitor = null, userInfo = null) {
 
 // 开始屏幕截图
 function startScreenshotCapture() {
-  screenshotInterval = setInterval(() => {
+  screenshotInterval = setInterval(async () => {
     if (!monitorIP) return;
 
-    const screenshotPath = path.join(app.getPath('temp'), config.SCREENSHOT.FILENAME);
-    screenshot(screenshotPath, (err, complete) => {
-      if (err) {
-        console.error('Screenshot failed:', err);
-        return;
-      }
+    try {
+      // 使用 Electron 自带的截图 API
+      const sources = await desktopCapturer.getSources({ 
+        types: ['screen'],
+        thumbnailSize: { width: 1920, height: 1080 }
+      });
 
-      // 读取截图文件并发送
-      fs.readFile(screenshotPath, (err, data) => {
-        if (err) {
-          console.error('Failed to read screenshot:', err);
-          return;
-        }
+      if (sources.length > 0) {
+        const screenshot = sources[0].thumbnail;
+        const buffer = screenshot.toPNG();
 
         const FormData = require('form-data');
         const form = new FormData();
-        form.append('image', data, config.SCREENSHOT.FILENAME);
+        form.append('image', buffer, config.SCREENSHOT.FILENAME);
         form.append('clientId', clientId);
 
-        axios.post(`http://${monitorIP}:${config.MONITOR_SERVER.DEFAULT_PORT}${config.MONITOR_SERVER.ENDPOINTS.SCREENSHOT}`, form, {
-          headers: form.getHeaders()
-        }).catch(err => console.error('Failed to send screenshot:', err.message));
-      });
-    });
+        await axios.post(
+          `http://${monitorIP}:${config.MONITOR_SERVER.DEFAULT_PORT}${config.MONITOR_SERVER.ENDPOINTS.SCREENSHOT}`,
+          form,
+          { headers: form.getHeaders() }
+        );
+      }
+    } catch (error) {
+      console.error('Screenshot failed:', error.message);
+    }
   }, config.SCREENSHOT.INTERVAL); // 每30秒截图
 }
 
