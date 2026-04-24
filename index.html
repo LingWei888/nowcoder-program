@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https: http:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https: http://api-acnowcoder.exitcode.cn; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
   <title>EC监控工具</title>
   <style>
     body { margin: 0; display: flex; flex-direction: column; height: 100vh; background: #222; overflow: hidden; font-family: sans-serif; }
@@ -75,9 +75,26 @@
   </div>
 
   <script>
-    const EXAM_URL = 'https://ac.nowcoder.com/';
-    const ALLOW_HOST_KEYWORD = 'nowcoder.com';
-    const EXIT_CONFIRM_TEXT = '我同意结束这场比赛';
+    // 配置信息（与 config.js 保持一致）
+    const CONFIG = {
+      MONITOR_API: {
+        BASE_URL: 'http://api-acnowcoder.exitcode.cn',
+        ENDPOINTS: {
+          GET_MONITORS: '/monitors'
+        }
+      },
+      EXAM: {
+        URL: 'https://ac.nowcoder.com/',
+        ALLOW_HOST_KEYWORD: 'nowcoder.com'
+      },
+      EXIT: {
+        CONFIRM_TEXT: '我同意结束这场比赛'
+      }
+    };
+
+    const EXAM_URL = CONFIG.EXAM.URL;
+    const ALLOW_HOST_KEYWORD = CONFIG.EXAM.ALLOW_HOST_KEYWORD;
+    const EXIT_CONFIRM_TEXT = CONFIG.EXIT.CONFIRM_TEXT;
     console.log('[renderer] 页面脚本启动');
 
     const tabsContainer = document.getElementById('tabs');
@@ -94,7 +111,7 @@
     // 加载监控服务器列表
     async function loadMonitors() {
       try {
-        const response = await fetch('http://localhost:8080/api.php/monitors');
+        const response = await fetch(`${CONFIG.MONITOR_API.BASE_URL}${CONFIG.MONITOR_API.ENDPOINTS.GET_MONITORS}`);
         const monitors = await response.json();
 
         monitorList.innerHTML = '';

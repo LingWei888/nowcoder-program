@@ -5,17 +5,14 @@ const screenshot = require('desktop-screenshot');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const config = require('./config');
 
 // 隐藏退出快捷键（仅你知道）
-const SAFE_QUIT_ACCELERATOR = 'CommandOrControl+Shift+Alt+Q';
-const EXIT_CONFIRM_TEXT = '我同意结束这场比赛';
+const SAFE_QUIT_ACCELERATOR = config.EXIT.SAFE_QUIT_ACCELERATOR;
+const EXIT_CONFIRM_TEXT = config.EXIT.CONFIRM_TEXT;
 
 // 默认尝试关闭的通讯软件
-const BLOCKED_PROCESS_NAMES = [
-  'QQ.exe', 'WeChat.exe', 'DingTalk.exe', 'WXWork.exe', 'TIM.exe',
-  'ToDesk.exe', 'SunloginClient.exe', 'SunloginRemote.exe',
-  'TeamViewer.exe', 'AnyDesk.exe', 'RustDesk.exe', 'ToDesk_Service.exe'
-];
+const BLOCKED_PROCESS_NAMES = config.BLOCKED_PROCESSES;
 
 let mainWindow = null;
 let isAppQuittingAllowed = false;
@@ -49,7 +46,7 @@ async function connectToMonitor(selectedMonitor = null) {
       monitors = [selectedMonitor];
     } else {
       // 从Web端获取监控服务器列表
-      const response = await axios.get('http://api-acnowcoder.exitcode.cn/api.php/monitors');
+      const response = await axios.get(`${config.MONITOR_API.BASE_URL}${config.MONITOR_API.ENDPOINTS.GET_MONITORS}`);
       monitors = response.data;
 
       if (monitors.length === 0) {
@@ -65,12 +62,12 @@ async function connectToMonitor(selectedMonitor = null) {
     clientId = getClientId();
 
     // 连接到监控服务器
-    await axios.post(`http://${monitorIP}:3000/connect`, { clientId });
+    await axios.post(`http://${monitorIP}:${config.MONITOR_SERVER.DEFAULT_PORT}${config.MONITOR_SERVER.ENDPOINTS.CONNECT}`, { clientId });
     console.log(`Connected to monitor ${monitorIP} as ${clientId}`);
 
     // 启动心跳
     setInterval(() => {
-      axios.post(`http://${monitorIP}:3000/heartbeat`, { clientId })
+      axios.post(`http://${monitorIP}:${config.MONITOR_SERVER.DEFAULT_PORT}${config.MONITOR_SERVER.ENDPOINTS.HEARTBEAT}`, { clientId })
         .catch(err => console.error('Heartbeat failed:', err.message));
     }, 10000);
 
@@ -87,7 +84,7 @@ function startScreenshotCapture() {
   screenshotInterval = setInterval(() => {
     if (!monitorIP) return;
 
-    const screenshotPath = path.join(app.getPath('temp'), 'exam_screenshot.png');
+    const screenshotPath = path.join(app.getPath('temp'), config.SCREENSHOT.FILENAME);
     screenshot(screenshotPath, (err, complete) => {
       if (err) {
         console.error('Screenshot failed:', err);
@@ -103,15 +100,15 @@ function startScreenshotCapture() {
 
         const FormData = require('form-data');
         const form = new FormData();
-        form.append('image', data, 'screenshot.png');
+        form.append('image', data, config.SCREENSHOT.FILENAME);
         form.append('clientId', clientId);
 
-        axios.post(`http://${monitorIP}:3000/screenshot`, form, {
+        axios.post(`http://${monitorIP}:${config.MONITOR_SERVER.DEFAULT_PORT}${config.MONITOR_SERVER.ENDPOINTS.SCREENSHOT}`, form, {
           headers: form.getHeaders()
         }).catch(err => console.error('Failed to send screenshot:', err.message));
       });
     });
-  }, 30000); // 每30秒截图
+  }, config.SCREENSHOT.INTERVAL); // 每30秒截图
 }
 
 // 停止屏幕截图
@@ -135,7 +132,7 @@ function createMainWindow() {
     title: 'EC监控工具',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      webviewTag: true,        
+      webviewTag: true,
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -171,7 +168,7 @@ function createMainWindow() {
   });
 
   mainWindow.on('minimize', (event) => event.preventDefault());
-  
+
   // 屏蔽主窗口外壳本身的刷新快捷键
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.key === 'F5' || (input.control && input.key === 'r')) {
@@ -184,7 +181,7 @@ function createMainWindow() {
 app.on('web-contents-created', (event, contents) => {
   const contentsType = contents.getType();
   console.log('[main] web-contents-created, type:', contentsType);
-  
+
   if (contentsType === 'webview') {
     console.log('[main] 检测到 webview，注册 setWindowOpenHandler');
     contents.on('console-message', (_event, level, message, line, sourceId) => {

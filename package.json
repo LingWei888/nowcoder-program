@@ -7,13 +7,14 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "start": "electron .",
-    "dev": "electron .",
+    "start": "cross-env NODE_OPTIONS= electron .",
+    "dev": "cross-env NODE_OPTIONS= electron .",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
     "build": "electron-builder --win --mac"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "electron": "^28.0.0",
     "electron-builder": "^24.13.3"
   },
