@@ -163,6 +163,7 @@
     let tabCount = 0;
     let firstTabId = null; // 记录第一个标签ID，不允许关闭
     let examStartUrl = null; // 保存从服务端获取的比赛链接
+    let webviewPreloadPath = ''; // 从主进程获取的webview-preload路径
 
     // 更新时间
     function updateClock() {
@@ -186,20 +187,6 @@
           console.warn('[renderer] normalizeUrl failed for', url, 'base', base, error.message);
           return url;
         }
-      }
-    }
-
-    function getWebviewPreloadPath() {
-      try {
-        const url = new URL(window.location.href);
-        let pathname = decodeURIComponent(url.pathname);
-        if (/^\/([A-Za-z]:\/)/.test(pathname)) {
-          pathname = pathname.slice(1);
-        }
-        return pathname.replace(/[/\\]index\.html$/, '/webview-preload.js');
-      } catch (error) {
-        console.warn('[renderer] getWebviewPreloadPath failed:', error.message);
-        return '';
       }
     }
 
@@ -269,13 +256,12 @@
       webview.src = normalizedUrl;
       webview.allowpopups = true;
       webview.partition = 'persist:exam'; // 配置 partition，确保事件传递
-      const preloadPath = getWebviewPreloadPath();
-      if (preloadPath) {
-        webview.preload = preloadPath;
+      if (webviewPreloadPath) {
+        webview.preload = webviewPreloadPath;
+        console.log('[renderer] webview preload path:', webviewPreloadPath);
       } else {
         console.warn('[renderer] webview preload path 未设置');
       }
-      console.log('[renderer] webview preload path:', preloadPath);
 
       webview.addEventListener('will-navigate', (e) => {
         if (!isAllowedUrl(e.url)) {
@@ -398,6 +384,14 @@
         document.querySelectorAll('webview').forEach(wv => {
           wv.style.pointerEvents = 'auto';
         });
+      });
+    }
+
+    // 监听webview-preload路径
+    if (window.ecApi && typeof window.ecApi.onSetWebviewPreload === 'function') {
+      window.ecApi.onSetWebviewPreload((preloadPath) => {
+        console.log('[renderer] 收到webview-preload路径:', preloadPath);
+        webviewPreloadPath = preloadPath;
       });
     }
 

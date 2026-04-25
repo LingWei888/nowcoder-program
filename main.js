@@ -356,7 +356,7 @@ function createMainWindow(examUrl) {
   // 隐藏菜单栏
   mainWindow.setMenu(null);
 
-  // 等待页面加载完成后发送考试URL
+  // 等待页面加载完成后发送考试URL和preload路径
   mainWindow.webContents.on('did-finish-load', () => {
     if (examUrl) {
       mainWindow.webContents.send('ec-start-exam', examUrl);
@@ -366,6 +366,10 @@ function createMainWindow(examUrl) {
     if (currentUserInfo) {
       mainWindow.webContents.send('ec-set-watermark', currentUserInfo);
     }
+    
+    // 发送webview-preload.js的正确路径
+    const webviewPreloadPath = path.join(__dirname, 'webview-preload.js');
+    mainWindow.webContents.send('ec-set-webview-preload', webviewPreloadPath);
     
     mainWindow.show();
   });

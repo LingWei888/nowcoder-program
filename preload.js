@@ -57,6 +57,15 @@ contextBridge.exposeInMainWorld('ecApi', {
     };
     ipcRenderer.on('ec-resume-exam', handler);
     return () => ipcRenderer.removeListener('ec-resume-exam', handler);
+  },
+  onSetWebviewPreload: (callback) => {
+    console.log('[preload] 注册 ec-set-webview-preload 监听器');
+    const handler = (_event, preloadPath) => {
+      console.log('[preload] 收到 ec-set-webview-preload:', preloadPath);
+      callback(preloadPath);
+    };
+    ipcRenderer.on('ec-set-webview-preload', handler);
+    return () => ipcRenderer.removeListener('ec-set-webview-preload', handler);
   }
 });
 
