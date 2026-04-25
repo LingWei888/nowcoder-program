@@ -23,6 +23,11 @@ let monitorIP = null;
 let clientId = null;
 let screenshotInterval = null;
 let currentUserInfo = null;
+let heartbeatInterval = null;
+let reconnectInterval = null;
+let isMonitoringConnected = true;
+let originalServerUrl = null;
+let selectedMonitorId = null;
 
 function killBlockedProcessesOnWindows() {
   if (process.platform !== 'win32') return;
@@ -56,37 +61,206 @@ async function connectToMonitor(selectedMonitor = null, userInfo = null) {
         return;
       }
 
-      // 选择第一个在线的监控服务器
-      selectedMonitor = monitors[0];
+      // 优先选择有公网穿透地址的监控服务器
+      const monitorWithPublicUrl = monitors.find(m => m.public_url && m.public_url.trim() !== '');
+      selectedMonitor = monitorWithPublicUrl || monitors[0];
     }
 
-    monitorIP = selectedMonitor.ip;
+    // 保存选中的监控服务器ID
+    selectedMonitorId = selectedMonitor.id;
     clientId = userInfo ? userInfo.studentId : getClientId();
 
-    // 连接到监控服务器
-    await axios.post(`http://${monitorIP}:${config.MONITOR_SERVER.DEFAULT_PORT}${config.MONITOR_SERVER.ENDPOINTS.CONNECT}`, {
-      clientId,
-      name: userInfo?.name || '',
-      nickname: userInfo?.nickname || ''
-    });
-    console.log(`Connected to monitor ${monitorIP} as ${clientId}`);
+    // 尝试连接：优先使用 public_url，失败则降级到 ip:port
+    let connected = false;
+    let serverUrl = null;
+
+    // 第一次尝试：使用 public_url
+    if (selectedMonitor.public_url && selectedMonitor.public_url.trim() !== '') {
+      try {
+        serverUrl = selectedMonitor.public_url;
+        monitorIP = selectedMonitor.public_url;
+        console.log(`Trying public URL: ${serverUrl}`);
+        
+        await axios.post(`${serverUrl}${config.MONITOR_SERVER.ENDPOINTS.CONNECT}`, {
+          clientId,
+          name: userInfo?.name || '',
+          nickname: userInfo?.nickname || ''
+        });
+        
+        connected = true;
+        console.log(`Connected via public URL as ${clientId}`);
+      } catch (error) {
+        console.warn(`Public URL connection failed (${error.response?.status || error.message}), falling back to IP...`);
+      }
+    }
+
+    // 第二次尝试：使用 ip:port
+    if (!connected) {
+      serverUrl = `http://${selectedMonitor.ip}:${config.MONITOR_SERVER.DEFAULT_PORT}`;
+      monitorIP = selectedMonitor.ip;
+      console.log(`Trying IP: ${serverUrl}`);
+      
+      await axios.post(`${serverUrl}${config.MONITOR_SERVER.ENDPOINTS.CONNECT}`, {
+        clientId,
+        name: userInfo?.name || '',
+        nickname: userInfo?.nickname || ''
+      });
+      
+      connected = true;
+      console.log(`Connected via IP as ${clientId}`);
+    }
+
+    if (!connected) {
+      throw new Error('All connection attempts failed');
+    }
+
+    originalServerUrl = serverUrl;
 
     // 启动心跳
-    setInterval(() => {
-      axios.post(`http://${monitorIP}:${config.MONITOR_SERVER.DEFAULT_PORT}${config.MONITOR_SERVER.ENDPOINTS.HEARTBEAT}`, { clientId })
-        .catch(err => console.error('Heartbeat failed:', err.message));
-    }, 10000);
+    startHeartbeat(serverUrl);
 
     // 启动屏幕截图
-    startScreenshotCapture();
+    startScreenshotCapture(serverUrl);
 
   } catch (error) {
     console.error('Failed to connect to monitor:', error.message);
   }
 }
 
+// 启动心跳检测
+function startHeartbeat(serverUrl) {
+  // 清除旧的心跳定时器
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+  }
+
+  heartbeatInterval = setInterval(async () => {
+    try {
+      await axios.post(`${serverUrl}${config.MONITOR_SERVER.ENDPOINTS.HEARTBEAT}`, { clientId });
+      
+      // 心跳成功，如果之前断开了现在恢复
+      if (!isMonitoringConnected) {
+        console.log('[RECONNECT] Monitor connection restored!');
+        isMonitoringConnected = true;
+        stopReconnectAttempt();
+        resumeExam();
+      }
+    } catch (error) {
+      console.error('Heartbeat failed:', error.message);
+      
+      // 心跳失败，开始重连流程
+      if (isMonitoringConnected) {
+        console.log('[DISCONNECTED] Monitor connection lost, attempting reconnect...');
+        isMonitoringConnected = false;
+        pauseExam();
+        startReconnectAttempt();
+      }
+    }
+  }, 10000);
+}
+
+// 开始重连尝试
+function startReconnectAttempt() {
+  if (reconnectInterval) return; // 避免重复启动
+
+  console.log('[RECONNECT] Starting reconnect attempts every 20 seconds...');
+  
+  reconnectInterval = setInterval(async () => {
+    try {
+      console.log('[RECONNECT] Fetching monitor list...');
+      const response = await axios.get(`${config.MONITOR_API.BASE_URL}${config.MONITOR_API.ENDPOINTS.GET_MONITORS}`);
+      const monitors = response.data;
+
+      // 查找相同ID的监控服务器
+      const targetMonitor = monitors.find(m => m.id === selectedMonitorId);
+      
+      if (targetMonitor) {
+        console.log('[RECONNECT] Found target monitor:', targetMonitor.id);
+        
+        let connected = false;
+        let serverUrl = null;
+
+        // 第一次尝试：使用 public_url
+        if (targetMonitor.public_url && targetMonitor.public_url.trim() !== '') {
+          try {
+            serverUrl = targetMonitor.public_url;
+            monitorIP = targetMonitor.public_url;
+            console.log('[RECONNECT] Trying public URL:', serverUrl);
+            
+            await axios.post(`${serverUrl}${config.MONITOR_SERVER.ENDPOINTS.CONNECT}`, {
+              clientId,
+              name: currentUserInfo?.name || '',
+              nickname: currentUserInfo?.nickname || ''
+            });
+            
+            connected = true;
+            console.log('[RECONNECT] Connected via public URL');
+          } catch (error) {
+            console.warn('[RECONNECT] Public URL failed, trying IP...');
+          }
+        }
+
+        // 第二次尝试：使用 ip:port
+        if (!connected) {
+          serverUrl = `http://${targetMonitor.ip}:${config.MONITOR_SERVER.DEFAULT_PORT}`;
+          monitorIP = targetMonitor.ip;
+          console.log('[RECONNECT] Trying IP:', serverUrl);
+          
+          await axios.post(`${serverUrl}${config.MONITOR_SERVER.ENDPOINTS.CONNECT}`, {
+            clientId,
+            name: currentUserInfo?.name || '',
+            nickname: currentUserInfo?.nickname || ''
+          });
+          
+          connected = true;
+          console.log('[RECONNECT] Connected via IP');
+        }
+
+        if (connected) {
+          console.log('[RECONNECT] Successfully reconnected!');
+          originalServerUrl = serverUrl;
+          
+          // 重启心跳和截图
+          startHeartbeat(serverUrl);
+          stopScreenshotCapture();
+          startScreenshotCapture(serverUrl);
+        }
+      } else {
+        console.log('[RECONNECT] Target monitor not found in list');
+      }
+    } catch (error) {
+      console.error('[RECONNECT] Reconnect attempt failed:', error.message);
+    }
+  }, 20000);
+}
+
+// 停止重连尝试
+function stopReconnectAttempt() {
+  if (reconnectInterval) {
+    clearInterval(reconnectInterval);
+    reconnectInterval = null;
+    console.log('[RECONNECT] Stopped reconnect attempts');
+  }
+}
+
+// 暂停考试（冻结webview）
+function pauseExam() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('ec-pause-exam');
+    console.log('[PAUSE] Exam paused');
+  }
+}
+
+// 恢复考试
+function resumeExam() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('ec-resume-exam');
+    console.log('[RESUME] Exam resumed');
+  }
+}
+
 // 开始屏幕截图
-function startScreenshotCapture() {
+function startScreenshotCapture(serverUrl) {
   screenshotInterval = setInterval(async () => {
     if (!monitorIP) return;
 
@@ -107,7 +281,7 @@ function startScreenshotCapture() {
         form.append('clientId', clientId);
 
         await axios.post(
-          `http://${monitorIP}:${config.MONITOR_SERVER.DEFAULT_PORT}${config.MONITOR_SERVER.ENDPOINTS.SCREENSHOT}`,
+          `${serverUrl}${config.MONITOR_SERVER.ENDPOINTS.SCREENSHOT}`,
           form,
           { headers: form.getHeaders() }
         );
@@ -372,6 +546,8 @@ if (!gotTheLock) {
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
     stopScreenshotCapture();
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    stopReconnectAttempt();
   });
   app.on('window-all-closed', () => app.quit());
 }

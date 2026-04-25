@@ -71,6 +71,36 @@
       pointer-events: none;
       font-family: monospace;
     }
+
+    #pause-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      z-index: 99999;
+      color: white;
+      font-size: 24px;
+    }
+
+    #pause-overlay .spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -84,6 +114,10 @@
   <div id="content"></div>
   <div id="watermark-container"></div>
   <div id="clock"></div>
+  <div id="pause-overlay">
+    <div class="spinner"></div>
+    <div>监考服务器断开连接，正在重新连接...</div>
+  </div>
 
   <div id="exit-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="exit-modal-title">
     <div class="modal-box">
@@ -338,6 +372,32 @@
         // 保存从服务端获取的比赛链接
         examStartUrl = examUrl;
         createTab(examUrl);
+      });
+    }
+
+    // 监听暂停考试
+    if (window.ecApi && typeof window.ecApi.onPauseExam === 'function') {
+      window.ecApi.onPauseExam(() => {
+        console.log('[renderer] 收到暂停考试事件');
+        const overlay = document.getElementById('pause-overlay');
+        overlay.style.display = 'flex';
+        // 冻结所有webview
+        document.querySelectorAll('webview').forEach(wv => {
+          wv.style.pointerEvents = 'none';
+        });
+      });
+    }
+
+    // 监听恢复考试
+    if (window.ecApi && typeof window.ecApi.onResumeExam === 'function') {
+      window.ecApi.onResumeExam(() => {
+        console.log('[renderer] 收到恢复考试事件');
+        const overlay = document.getElementById('pause-overlay');
+        overlay.style.display = 'none';
+        // 解冻所有webview
+        document.querySelectorAll('webview').forEach(wv => {
+          wv.style.pointerEvents = 'auto';
+        });
       });
     }
 

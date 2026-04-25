@@ -39,6 +39,24 @@ contextBridge.exposeInMainWorld('ecApi', {
     };
     ipcRenderer.on('ec-trigger-exit-modal', handler);
     return () => ipcRenderer.removeListener('ec-trigger-exit-modal', handler);
+  },
+  onPauseExam: (callback) => {
+    console.log('[preload] 注册 ec-pause-exam 监听器');
+    const handler = (_event) => {
+      console.log('[preload] 收到 ec-pause-exam');
+      callback();
+    };
+    ipcRenderer.on('ec-pause-exam', handler);
+    return () => ipcRenderer.removeListener('ec-pause-exam', handler);
+  },
+  onResumeExam: (callback) => {
+    console.log('[preload] 注册 ec-resume-exam 监听器');
+    const handler = (_event) => {
+      console.log('[preload] 收到 ec-resume-exam');
+      callback();
+    };
+    ipcRenderer.on('ec-resume-exam', handler);
+    return () => ipcRenderer.removeListener('ec-resume-exam', handler);
   }
 });
 
