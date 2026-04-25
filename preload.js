@@ -30,6 +30,15 @@ contextBridge.exposeInMainWorld('ecApi', {
     };
     ipcRenderer.on('ec-set-watermark', handler);
     return () => ipcRenderer.removeListener('ec-set-watermark', handler);
+  },
+  onTriggerExitModal: (callback) => {
+    console.log('[preload] 注册 ec-trigger-exit-modal 监听器');
+    const handler = (_event) => {
+      console.log('[preload] 收到 ec-trigger-exit-modal');
+      callback();
+    };
+    ipcRenderer.on('ec-trigger-exit-modal', handler);
+    return () => ipcRenderer.removeListener('ec-trigger-exit-modal', handler);
   }
 });
 

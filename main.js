@@ -160,11 +160,11 @@ function createMainWindow(examUrl) {
   mainWindow = new BrowserWindow({
     width: 1366,
     height: 768,
-    fullscreen: true,
-    frame: false,
-    alwaysOnTop: true,
-    movable: false,
-    resizable: false,
+    fullscreen: false,
+    frame: true,
+    alwaysOnTop: false,
+    movable: true,
+    resizable: true,
     backgroundColor: '#111111',
     title: '2OI监控工具',
     icon: path.join(__dirname, 'build', 'favicon.ico'),
@@ -178,6 +178,9 @@ function createMainWindow(examUrl) {
   });
 
   mainWindow.loadFile('index.html');
+
+  // 隐藏菜单栏
+  mainWindow.setMenu(null);
 
   // 等待页面加载完成后发送考试URL
   mainWindow.webContents.on('did-finish-load', () => {
@@ -216,11 +219,7 @@ function createMainWindow(examUrl) {
     return { action: 'deny' };
   });
 
-  mainWindow.on('leave-full-screen', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setFullScreen(true);
-  });
-
-  mainWindow.on('minimize', (event) => event.preventDefault());
+  // 允许最小化、最大化和关闭窗口
 
   // 屏蔽主窗口外壳本身的刷新快捷键
   mainWindow.webContents.on('before-input-event', (event, input) => {
@@ -323,9 +322,25 @@ ipcMain.handle('ec-open-main-window', (_event, examUrl) => {
 });
 
 app.on('browser-window-created', (_event, win) => {
-  win.on('close', (event) => {
-    if (!isAppQuittingAllowed) event.preventDefault();
-  });
+  // 登录窗口关闭时退出应用，主窗口拦截关闭事件需要口令验证
+  if (win === loginWindow) {
+    win.on('closed', () => {
+      loginWindow = null;
+      if (!mainWindow) {
+        app.quit();
+      }
+    });
+  } else if (win === mainWindow) {
+    win.on('close', (event) => {
+      if (!isAppQuittingAllowed) {
+        event.preventDefault();
+        // 触发退出对话框，与"退出比赛"按钮效果一致
+        if (!mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('ec-trigger-exit-modal');
+        }
+      }
+    });
+  }
 });
 
 // ==========================================
