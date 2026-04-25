@@ -32,7 +32,7 @@ module.exports = {
 
   // 被禁止的进程列表
   BLOCKED_PROCESSES: [
-    'QQ.exe', 'WeChat.exe', 'DingTalk.exe', 'WXWork.exe', 'TIM.exe',
+    'QQ.exe','Weixin.exe','msedge.exe','chrome.exe', 'WeChat.exe', 'DingTalk.exe', 'WXWork.exe', 'TIM.exe',
     'ToDesk.exe', 'SunloginClient.exe', 'SunloginRemote.exe',
     'TeamViewer.exe', 'AnyDesk.exe', 'RustDesk.exe', 'ToDesk_Service.exe'
   ],
