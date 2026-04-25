@@ -1,5 +1,5 @@
 {
-  "name": "2OI监考客户端",
+  "name": "2OI-Exam-Client",
   "version": "1.0.0",
   "description": "合规在线考试客户端",
   "main": "main.js",
@@ -26,6 +26,7 @@
   "build": {
     "appId": "cn.exitcode.examclient",
     "productName": "2OI监考客户端",
+    "artifactName": "ExamClient-${version}-${arch}.${ext}",
     "directories": {
       "output": "dist"
     },
