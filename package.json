@@ -1,9 +1,9 @@
 {
-  "name": "exam-client-basic",
+  "name": "2OI监考客户端",
   "version": "1.0.0",
-  "description": "合规版在线考试客户端",
+  "description": "合规在线考试客户端",
   "main": "main.js",
-  "author": "your-name",
+  "author": "LingWei",
   "license": "MIT",
   "private": true,
   "scripts": {
@@ -24,8 +24,8 @@
     "form-data": "^4.0.5"
   },
   "build": {
-    "appId": "com.exam.client",
-    "productName": "ExamClient",
+    "appId": "cn.exitcode.examclient",
+    "productName": "2OI监考客户端",
     "directories": {
       "output": "dist"
     },
